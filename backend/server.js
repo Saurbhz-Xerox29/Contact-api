@@ -7,12 +7,12 @@ import { config } from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
 
-const app = express();
-
 // .env setup (always resolve from this backend folder)
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 config({ path: path.join(__dirname, ".env") });
+
+const app = express();
 
 app.use(express.json());
 
@@ -42,10 +42,17 @@ app.use(
   })
 );
 
-// .env setup (always resolve from this backend folder)
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-config({ path: path.join(__dirname, ".env") });
+// Serve the built frontend in production (single deployable service)
+if (process.env.NODE_ENV === "production") {
+  const clientDistPath = path.join(__dirname, "..", "client", "dist");
+  app.use(express.static(clientDistPath));
+
+  // SPA fallback (do not swallow API routes)
+  app.get("*", (req, res, next) => {
+    if (req.path.startsWith("/api/")) return next();
+    res.sendFile(path.join(clientDistPath, "index.html"));
+  });
+}
 
 // user Router
 app.use("/api/user",userRouter);
@@ -53,19 +60,18 @@ app.use("/api/user",userRouter);
 // contact Router 
 app.use('/api/contact',contactRouter)
 
-
-// home route
-app.get("/", (req, res) => {
-  res.json({ message: "This is home route working" });
+// Health check
+app.get("/api", (req, res) => {
+  res.json({ message: "API is running" });
 });
 
 // Always return JSON for unknown routes
 app.use((req, res) => {
   res.status(404).json({ message: "Not Found" });
 });
-app.get("/api", (req, res) => {
-  res.json({ message: "API is running" });
-});
+
+// JSON error handler
+app.use((err, req, res, next) => {
   // eslint-disable-next-line no-console
   console.error(err);
   res.status(500).json({ message: "Server error" });
